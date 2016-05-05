@@ -1,0 +1,323 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="reveal.css">
+        <link rel="stylesheet" href="solarized.css">
+        <style>
+            .reveal section img { border: none; }
+        </style>
+    </head>
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <section data-markdown>
+
+                    ## React / Redux at Scale
+
+                    ![redux logo](redux-logo.png =50x50) ![redux logo](redux-logo.png =100x100) ![redux logo](redux-logo.png =150x150)
+
+                    ### Don Abrams
+
+                    ![Allovue logo](allovue-logo.svg =50x50) 
+
+                    <aside class="notes">
+                        Mention Allovue.
+                    </aside>
+                </section>
+                <section data-markdown>
+                    ## Quick poll
+
+                    <aside class="notes">
+                       Ask how many people have heard of react, redux. Ask how many have used it in production. Ask how many people have used it for applications over 10 screens big.
+                    </aside>
+                </section>
+                <section data-markdown>
+                    ## Previous Architectures
+
+                    1. jQuery
+                    2. jQuery + EventEmitter
+                    3. Angular
+                    4. Raw React + EventEmitter
+                    <aside class="notes">
+                        We all have our biases
+                        Before redux we just used raw react; usually populated via EventEmitter. React was obviously nice for views
+                    </aside>
+                </section>
+                <section data-markdown>
+                    ## Components
+
+                    - Awesome for reuse
+                    - Isomorphic needs
+                    - Easiest to understand/debug when they don't have state
+                    - Trigger events we understand the effects of (+ backtrace)
+                    <aside class="notes">
+                        Isomorphic is important for not writing things twice and SEO.
+                        Debuggability and ability to arbitrarily delete code and understand what we'd break also important.
+                    </aside>
+                </section>
+                <section data-markdown>
+                    ## Flux
+
+                    - Boilerplate sucks
+                    - Large/complex codebases
+                    - They want to control everything!
+                    <aside class="notes">
+                        Lots of boilerplate for little gain. We had a policy of only bringing in code bases we could read/fix bugs in reliably.
+                        Mutation still rampant.
+                    </aside>
+                </section>
+                <section>
+                    <section data-markdown>
+                        ## Storing and mutating state
+
+                        #### Immutability + State Machine = Predictability + Replayability
+
+                        ![redux logo](undertale.jpg =400x300)
+
+                        <aside class="notes">
+                            Ask if people know what a state machine is
+                            Also mention that replayability means easier testing and predictability means easier reproduction of bugs
+                        </aside>
+                    </section>
+                    <section data-markdown>
+                        ## State machines
+
+                        ![state machine](state-machine.png =450x300)
+                    </section>
+                </section>
+
+                <section data-markdown>
+                    ## Visual Explanation of Redux
+
+                    ![redux logo](ARCH-Redux2-real.gif =400x300)
+
+
+                    #### Credit to [jenyaterpil](http://slides.com/jenyaterpil/redux-from-twitter-hype-to-production)
+                </section>
+
+                <section data-markdown>
+                    ## Redux
+
+                    - lightly namespaces states
+                    - "reducer" style of state mutation
+                    - `connect` injects state and a `dispatcher` into components
+                    - serializable actions
+                    - one way binding
+
+                    <aside class="notes">
+                        Mention that the word action is overloaded and in redux it's a state machine transition.
+                        Talk about reducers and where that comes from
+                        mention reducer is a poor man's composable state machine
+                    </aside>
+                </section>
+
+                <section data-markdown>
+                    ## Best Practices for Scale
+
+                    - dumb views
+                    - encapsulated CSS
+                    - "smart" components
+                    - pragmatic immutability
+                    - monorepo
+                    - normalized reducers
+                    - asynchronous actions
+                </section>
+                <section>
+                    <section data-markdown>
+                        ## Dumb views
+
+                        - easiest to debug
+                        - easiest to reuse
+                        - proptypes are usage docs
+                        - easily can go into style libraries
+                    </section>
+                    <section data-markdown>
+                        ## Dumb view Example
+
+                        <pre><code data-trim data-noescape class="jsx">
+export default function CatCard({name, picUrl, 
+        cutenessRating, isSpecial, toggleFavACat}) {
+    const percentCuteStyle = {
+        width: `${cutenessRating/5*100}%`,
+    }
+    return (
+        &lt;section>
+            &lt;aside display-if={isSpecial} class="catCard__specialStar"/>
+            &lt;h2 class="catCard__name">{name}&lt;/div>
+            &lt;img class="catCard__pic" src={picUrl} onClick={()=>toggleFavACat()}/>
+            &lt;div class="catCard__cuteness">
+                &lt;div class="catCard__percent" style={percentCuteStyle}/>
+            &lt;/div>
+        &lt;/section>
+    )
+}
+CatCard.propTypes = { /*...*/ }
+                        </code></pre>
+                    </section>
+                </section>
+                <section data-markdown>
+                    ## CSS
+
+                    - keep CSS next to the component
+                    - Use BEM or some method of encapsulation
+                    <aside class="notes">
+                        Destructuring clarity, jsx and setState() problems makes it worth it to 
+                        Some plugins to do immutable.js destructuring, would be so worth it, but react/redux have trouble too (shallow equality and namespacing).
+                    </aside>
+                </section>
+                <section>
+                    <section data-markdown>
+                        ## Smart components
+
+                        - thin wrapper around dumb views
+                        - take in the smallest # of data properties
+                        - merge state from multiple reducers
+                        - handles computed properties
+                        - may inject some transient state
+                        - advice: use [recompose](https://github.com/acdlite/recompose)
+                        <aside class="notes">
+                            Mention that recompose might not be best if you're reusing this logic for iOS/Android, but it's easily refactorable.
+                        </aside>
+                    </section>
+                    <section data-markdown>
+                        ## Smart component example
+
+                        <pre><code data-noescape class="jsx">
+import {connect} from 'react-redux'
+import CatCard from '@org/cat-card'
+import {toggleFavACat} from '@org/cat-actions'
+import {setPropTypes, compose} from 'recompose'
+import {PropTypes} from 'react'
+
+export default compose(
+    setPropTypes({catId: PropTypes.number.isRequired}),
+    connect(
+        ({catCards, favCats}, {catId}) => ({
+            ...catCards.get(catId).toJS(),
+            isSpecial: favCats.has(catId),
+        }),
+        (dispatch, {catId}) => ({
+            toggleFavACat: toggleFavACat(dispatch, catId),
+        })
+    )
+)(CatCard)
+                        </code></pre>
+                    </section>
+                </section>
+                <section data-markdown>
+                    ## Immutable state
+
+                    - Keep state in actions/reducers immutable
+                    - Use plain objects in react
+                    <aside class="notes">
+                        Destructuring clarity, jsx and setState() problems makes it worth it to 
+                        Some plugins to do immutable.js destructuring, would be so worth it, but react/redux have trouble too (shallow equality and namespacing).
+                    </aside>
+                </section>
+                <section>
+                    <section data-markdown>
+                        ## Normalized Reducers
+
+                        - Reuse actions across multiple reducers
+                        - Keep reducer data "flat"
+                        - Makes clearing old data harder, but good enough for now
+                        - Use reducers all the time instead of state
+
+                        <aside class="notes">
+                            Page transition is a good time for clearing. Having your router "rehydrate" just what ya wanna keep is also valid.
+                            Very transient state, like isOpen is occasionally alright-- until ya wanna close it.
+                        </aside>
+                    </section>
+                    <section data-markdown>
+                        ## Normalized reducer example
+
+                        <pre><code data-noescape class="jsx">
+import {TOGGLE_FAV_A_CAT} from '@org/cat-actions'
+import {Map} from 'immutable'
+
+const initialState = Map()
+
+export default function favCatsReducer(action, state=initialState) {
+    switch(action.type) {
+        case TOGGLE_FAV_A_CAT: {
+            const {catId} = action
+            return state.set(catId, !state.has(catId))
+        }
+        default:
+            return state
+    }
+}
+                        </code></pre>
+                        <aside class="notes">
+                            Notice that this isn't mutating the catCard.
+                            Also notice that the constant is defined on the action. Reducers respond to actions, not the other way around.
+                        </aside>
+                    </section>
+                </section>
+                <section>
+                    <section data-markdown>
+                        ## Namespace your actions
+
+                        You'll thank yourself later
+                    </section>
+                    <section data-markdown>
+                        ## Action example
+
+                        <pre><code data-noescape class="jsx">
+export const TOGGLE_FAV_A_CAT = "cat-actions/TOGGLE_FAV_A_CAT";
+export function toggleFavACat(dispatch, catId) {
+    dispatch({
+        type: TOGGLE_FAV_A_CAT,
+        catId
+    })
+}
+                        </code></pre>
+                        <aside class="notes">
+                            Call attention to 'cat-actions/'
+                        </aside>
+                    </section>
+                </section>
+                <section data-markdown>
+                    ## Monorepo
+
+                    - All your components in one place
+                    - Make it easy to move components around w/o breaking things
+                    - Multiple apps in one repo
+                    - Shared boilerplate code (build, testing, fixtures, style lib, linting, etc)
+                    - No great examples yet (but talked about by [fb](https://hashnode.com/post/10-things-you-probably-didnt-know-about-javascript-react-and-nodejs-and-graphql-development-at-facebook-cink0r0e500h5io53fpl7ediu))
+
+                    <aside class="notes">
+                        File system conventions are evil
+                        Multiple apps in one repo is awesome for admin, bad for PCI
+                        Working on tooling for monorepos that isn't too opinionated but it's super hard
+                    </aside>
+                </section>
+                <section data-markdown>
+                    ## Async actions
+
+                    - This is where the devil lies
+                    - Simple, use [thunk](https://github.com/gaearon/redux-thunk)
+                    - Simple Promises, use [redux-promise](https://github.com/acdlite/redux-promise)
+                    - Complex, use [sagas](https://github.com/yelouafi/redux-saga)
+                    - Animations should def use sagas.
+
+                    <aside class="notes">
+                        This is the one thing ember is really amazing at comparatively.
+                    </aside>
+                </section>
+            </div>
+        </div>
+        <script src="classList.js"></script>
+        <script src="head.min.js"></script>
+        <script src="reveal.js"></script>
+        <script src="data-markdown.user.js"></script>
+        <script>
+            Reveal.initialize({
+                history: true,
+                showNotes:true,
+                dependencies: [
+                    { src: 'highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+                ]
+            });
+        </script>
+    </body>
+</html>
